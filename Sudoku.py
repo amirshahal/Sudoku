@@ -166,7 +166,7 @@ class Sudoku:
         self.print_text("Instructions:", 1)
         self.print_text("Use right arrow (->) in order to solve next step.", 2)
         self.print_text("Use left arrow (<-) in order to undo last step.", 3)
-        self.print_text("Use key q in quit.", 4)
+        self.print_text("Use key q in order to quit.", 4)
         self.print_text("Use key a in order to show available value.", 5)
         self.print_text("Use any other key in order to hide available values.", 6)
         self.print_text("In order to try a value use the following combination:", 7)
@@ -227,7 +227,7 @@ class Sudoku:
                     self.solved = False
 
                     if self.show_available_values:
-                        for i, avail_value in enumerate(cell.available_values[self.solved_step]):
+                        for i, avail_value in enumerate(sorted(cell.available_values[self.solved_step])):
                             text = self.avail_font.render(str(avail_value), True, Color.GREEN)
                             draw_v = cell_size * row + (cell_size // 3) * (i // 3) + (cell_size // 3)
                             draw_h = cell_size * col + cell_size // 3 * (i % 3) + (cell_size // 3)
@@ -287,7 +287,6 @@ class Sudoku:
 
         cell = self.cells[row][col]
         if cell.value is None:
-
             if val in cell.available_values[self.solved_step]:
                 self.solved_step += 1
                 self.cells[row][col].solved(self.solved_step, val, True)
@@ -683,6 +682,6 @@ if __name__ == '__main__':
 
     sudoku = Sudoku()
     # sudoku.load_puzzle(SudokuPuzzles.haaretz_20220311_medium)
-    # sudoku.load_puzzle(SudokuPuzzles.haaretz_20220401_medium)
-    sudoku.load_puzzle(SudokuPuzzles.haaretz_20220311_difficult)
+    sudoku.load_puzzle(SudokuPuzzles.haaretz_20220401_medium)
+    # sudoku.load_puzzle(SudokuPuzzles.haaretz_20220311_difficult)
     sudoku.run()
