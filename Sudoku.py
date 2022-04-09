@@ -291,6 +291,8 @@ class Sudoku:
                 self.solved_step += 1
                 self.cells[row][col].solved(self.solved_step, val, True)
                 self.update_all_available_values(new_step=True, update_derived=False)
+                self.msg = f"Trying {val} at ({row},{col})"
+                self.msg_color = Color.YELLOW
             else:
                 self.msg = f"Cell ({row + 1},{col + 1}): {val} is not available in this cell."
                 self.msg_color = Color.RED
