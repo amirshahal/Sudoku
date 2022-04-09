@@ -287,6 +287,7 @@ class Sudoku:
 
         cell = self.cells[row][col]
         if cell.value is None:
+
             if val in cell.available_values[self.solved_step]:
                 self.solved_step += 1
                 self.cells[row][col].solved(self.solved_step, val, True)
