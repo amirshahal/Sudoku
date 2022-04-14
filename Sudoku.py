@@ -3,7 +3,6 @@ import pygame
 import SudokuPuzzles
 from playsound import playsound
 
-
 # Everytime a value is added we re calc for each cell the avail values.
 # Each cell stores its avail values in an array that is indexed by the solved_step.
 # i.e. cell.avail_values[0] holds a set of the avail values for this cell after
@@ -36,6 +35,7 @@ class SudokuCell:
         self.grid = grid
         self.square_cells = []
         self.from_trial = False
+        self.steps_to_stuck = {}
 
     def __str__(self):
         rv = f"Cell: row= {self.row} ,col= {self.col} ,value= {self.value} ,solved_step= {self.solved_step} " + \
@@ -88,6 +88,8 @@ class Sudoku:
         self.surf = None
         self.msg = "Go!"
         self.msg_color = Color.BLUE
+        self.hint = False
+        self.algo_level = 1
 
     def draw_grid(self, divisions):
         cont_x, cont_y = 10, 10  # TOP LEFT OF CONTAINER
@@ -133,6 +135,33 @@ class Sudoku:
                 (cont_x, cont_y + (cellSize * x)),
                 (cont_x + self.CONTAINER_WIDTH_HEIGHT, cont_y + (cellSize * x)), width)
 
+            """
+            if self.hint:
+                # up
+                pygame.draw.line(
+                    self.surf, Color.BLUE,
+                    (cont_x  + (cellSize * self.hint.col)    , cont_y + (cellSize * self.hint.row)),
+                    (cont_x + (cellSize * (self.hint.col +1)), cont_y + (cellSize * self.hint.row)), 3)
+
+                # bottom
+                pygame.draw.line(
+                    self.surf, Color.BLUE,
+                    (cont_x + (cellSize * self.hint.col), cont_y + (cellSize * (self.hint.row + 1))),
+                    (cont_x + (cellSize * (self.hint.col + 1)), cont_y + (cellSize * (self.hint.row + 1))), 3)
+
+                # left
+                pygame.draw.line(
+                    self.surf, Color.BLUE,
+                    (cont_x + cellSize * self.hint.col, cont_y + (cellSize * self.hint.row)),
+                    (cont_x + cellSize * self.hint.col,  cont_y + (cellSize * (self.hint.row + 1))), 3)
+
+                # right
+                pygame.draw.line(
+                    self.surf, Color.BLUE,
+                    (cont_x + cellSize * (self.hint.col + 1), cont_y + (cellSize * self.hint.row)),
+                    (cont_x + cellSize * (self.hint.col + 1), cont_y + (cellSize * (self.hint.row + 1))), 3)
+            """
+
     def get_color(self, cell):
         if cell.from_trial:
             rv = Color.YELLOW
@@ -166,9 +195,9 @@ class Sudoku:
         self.print_text("Instructions:", 1)
         self.print_text("Use right arrow (->) in order to solve next step.", 2)
         self.print_text("Use left arrow (<-) in order to undo last step.", 3)
-        self.print_text("Use key q in order to quit.", 4)
-        self.print_text("Use key a in order to show available value.", 5)
-        self.print_text("Use any other key in order to hide available values.", 6)
+        self.print_text("q -> quit; h -> hint", 4)
+        self.print_text("a -> show available values.", 5)
+        self.print_text("Use any other key in order to hide available values / hint.", 6)
         self.print_text("In order to try a value use the following combination:", 7)
         self.print_text("     t[0-9][0-9][0-9]", 8)
         self.print_text("     First digit is raw, second is column, third is value.", 9)
@@ -220,6 +249,7 @@ class Sudoku:
     def show_values(self):
         cell_size = self.CONTAINER_WIDTH_HEIGHT // 9
         cells_solved = 0
+        self.solved = True  # changed to False on the first unsolved cell found
         for row in range(9):
             for col in range(9):
                 cell = self.cells[row][col]
@@ -233,6 +263,13 @@ class Sudoku:
                             draw_h = cell_size * col + cell_size // 3 * (i % 3) + (cell_size // 3)
 
                             self.surf.blit(text, (draw_h, draw_v))
+
+                    if self.hint and self.hint == cell:
+                        text = self.text_font.render("?", True, Color.RED)
+                        draw_h = cell_size * col + cell_size // 2
+                        draw_v = cell_size * row + cell_size // 2
+                        self.surf.blit(text, (draw_h, draw_v))
+
                 else:
                     color = self.get_color(cell)
                     text = self.text_font.render(str(cell.value), True, color)
@@ -273,12 +310,15 @@ class Sudoku:
 
         while True:
             self.check_events()
-            self.surf.fill(Color.GREY)
-            self.draw_grid(9)
-            self.solved = True  # changed to False on the first unsolved cell found
-            cell_solved = self.show_values()
-            self.print_instructions(cell_solved)
-            pygame.display.update()
+            self.draw()
+
+    def draw(self):
+        self.surf.fill(Color.GREY)
+        self.draw_grid(9)
+        cells_solved = self.show_values()
+        self.print_instructions(cells_solved)
+        pygame.display.update()
+        return cells_solved
 
     def do_trial(self):
         row = int(self.trial[0]) - 1
@@ -290,7 +330,7 @@ class Sudoku:
             if val in cell.available_values[self.solved_step]:
                 self.solved_step += 1
                 self.cells[row][col].solved(self.solved_step, val, True)
-                self.update_all_available_values(new_step=True, update_derived=False)
+                self.update_all_available_values(new_step=True)
                 self.msg = f"Trying {val} at ({row},{col})"
                 self.msg_color = Color.YELLOW
             else:
@@ -307,12 +347,18 @@ class Sudoku:
 
             if event.type == pygame.locals.KEYDOWN:
                 self.show_available_values = False
+                self.hint = False
                 if event.key == pygame.locals.K_a:
                     self.show_available_values = True
 
                 if event.key == pygame.locals.K_q:
                     pygame.quit()
                     sys.exit()
+
+                if event.key == pygame.locals.K_h:
+                    self.hint = True
+                    if self.on:
+                        self.solve_next_cell()
 
                 if event.key == pygame.locals.K_DOWN or event.key == pygame.locals.K_RIGHT:
                     if self.on:
@@ -321,7 +367,11 @@ class Sudoku:
                 if event.key == pygame.locals.K_f:
                     for _ in range(81):
                         if self.on:
-                            self.solve_next_cell()
+                            pygame.time.delay(500)
+                            was_cell_solved = self.solve_next_cell()
+                            cells_solved = self.draw()
+                            if cells_solved == 81 or not was_cell_solved:
+                                break
 
                 if event.key == pygame.locals.K_UP or event.key == pygame.locals.K_LEFT:
                     self.undo()
@@ -371,7 +421,7 @@ class Sudoku:
             self.solved_step -= 1
             self.solved = False
 
-    def update_all_available_values(self, new_step, update_derived):
+    def update_all_available_values(self, new_step):
         while True:
             avail_changed = False
             derive_changed = False
@@ -388,19 +438,30 @@ class Sudoku:
                             self.msg_color = Color.RED
 
             new_step = False
-            if update_derived and self.solve_able:
+            if self.algo_level >1  and self.solve_able:
                 for row in range(9):
                     for col in range(9):
                         cell = self.cells[row][col]
                         if cell.value is None:
-                            derive_changed = self.remove_derived_values(cell) or derive_changed
-                            if len(cell.available_values[self.solved_step]) == 0:
-                                self.msg = f"Not solvable!!! cell ({cell.row},{cell.col}) has no avail values"
-                                self.msg_color = Color.RED
-                                self.solve_able = False
+                            if self.algo_level == 2:
+                                derive_changed = self.remove_derived_values(cell) or derive_changed
+                                if len(cell.available_values[self.solved_step]) == 0:
+                                    self.msg = f"Not solvable!!! cell ({cell.row},{cell.col}) has no avail values"
+                                    self.msg_color = Color.RED
+                                    self.solve_able = False
+                            if self.algo_level == 3:
+                                self.apply_algo_level3(cell)
 
             if not avail_changed and not derive_changed:
                 break
+
+    def get_steps_to_stuck(self, cell, value):
+        return -1
+
+    def apply_algo_level3(self, cell):
+        print(f'AL3 {cell}')
+        for value in sorted(cell.available_values):
+            cell.steps_to_stuck[value] = self.get_steps_to_stuck(cell, value)
 
     def remove_derived_values(self, cell):
         changed = self.remove_non_available_values(cell, 'row_derived')
@@ -414,7 +475,10 @@ class Sudoku:
         changed = self.remove_non_available_values(cell, 'square') or changed
         return changed
 
-    def solve_next_cell(self, second_run=False):
+    def show_hint(self, cell):
+        pass
+
+    def solve_next_cell(self):
         # Find cells that have unique values
         solved_cell = False
         for row in range(9):
@@ -422,22 +486,26 @@ class Sudoku:
                 for col in range(9):
                     cell = self.cells[row][col]
                     if cell.value is None:
-                        # populate available values
-                        # self.update_available_values(cell)
-                        # self.remove_derived_values(cell)
 
                         if len(cell.available_values[self.solved_step]) == 1:
-                            value = list(cell.available_values[self.solved_step])[0]
-                            self.solved_step += 1
-                            cell.solved(self.solved_step, value)
-                            self.update_all_available_values(new_step=True, update_derived=False)
-                            if self.solve_able:
-                                self.msg = f"Cell ({cell.row + 1}, {cell.col + 1}): only {value} is available " + \
-                                        "in this cell."
+                            if self.hint:
+                                self.hint = cell
+                                self.msg = f"Cell ({cell.row + 1}, {cell.col + 1}): only ? is available " + \
+                                           "in this cell."
                                 self.msg_color = Color.BLUE
-                                solved_cell = True
-                                # playsound('slice.wav')
+                            else:
+                                value = list(cell.available_values[self.solved_step])[0]
+                                self.solved_step += 1
+                                cell.solved(self.solved_step, value)
+                                self.update_all_available_values(new_step=True)
+                                if self.solve_able:
+                                    self.msg = f"Cell ({cell.row + 1}, {cell.col + 1}): only {value} is available " + \
+                                            "in this cell."
+                                    self.msg_color = Color.BLUE
+                                    # playsound('slice.wav')
+                            solved_cell = True
                             break
+
         if not solved_cell and self.solve_able:
             # There is no cell with single value available
             # go over rows (then columns, then squares) and see if a value is only available in one cell
@@ -446,10 +514,25 @@ class Sudoku:
                 solved_cell = self.find_value_avail_once_in_col()
                 if not solved_cell:
                     solved_cell = self.find_value_avail_once_in_square()
-        if not second_run and not solved_cell:
-            print("APPLYING DERIVED")
-            self.update_all_available_values(new_step=False, update_derived=True)
-            self.solve_next_cell(True)
+        if self.algo_level < 2 and not solved_cell:
+            print("Using algo level 2")
+            self.update_all_available_values(new_step=False)
+            self.algo_level = 2
+            return self.solve_next_cell()
+
+        if self.algo_level < 3 and not solved_cell:
+            print("Using algo level 3")
+            self.algo_level = 3
+            """
+            For each non solved cell try every avail value. Among the values tried and found they make the puzzle not
+            solvable, remove the one that makes the puzzle not solvable in the minimal steps. 
+            """
+            self.update_all_available_values(new_step=False)
+
+        if solved_cell:
+            self.algo_level = 1
+
+        return solved_cell
 
     def find_value_avail_once_in_row(self):
         solved = False
@@ -472,11 +555,16 @@ class Sudoku:
                                 # No need to check this value anymore (fow now...)
                                 break
                     if not value_found and value_avail_found_times == 1:
-                        self.solved_step += 1
-                        self.cells[row][value_avail_in_col].solved(self.solved_step, value)
-                        self.update_all_available_values(new_step=True, update_derived=False)
-                        self.msg = f"Row {row + 1}: {value} is only available in column {value_avail_in_col + 1}."
-                        self.msg_color = Color.BLUE
+                        if self.hint:
+                            self.hint = self.cells[row][value_avail_in_col]
+                            self.msg = f"Row {row + 1}: ? is only available in column {value_avail_in_col + 1}."
+                            self.msg_color = Color.BLUE
+                        else:
+                            self.solved_step += 1
+                            self.cells[row][value_avail_in_col].solved(self.solved_step, value)
+                            self.update_all_available_values(new_step=True)
+                            self.msg = f"Row {row + 1}: {value} is only available in column {value_avail_in_col + 1}."
+                            self.msg_color = Color.BLUE
                         solved = True
                         # playsound('slice.wav')
                         break
@@ -503,11 +591,16 @@ class Sudoku:
                                 # No need to check this value anymore (fow now...)
                                 break
                     if not value_found and value_avail_found_times == 1:
-                        self.solved_step += 1
-                        self.cells[value_avail_in_row][col].solved(self.solved_step, value)
-                        self.update_all_available_values(new_step=True, update_derived=False)
-                        self.msg = f"Col {col + 1}: {value} is only available in raw {value_avail_in_row + 1}."
-                        self.msg_color = Color.BLUE
+                        if self.hint:
+                            self.hint = self.cells[value_avail_in_row][col]
+                            self.msg = f"Col {col + 1}: ? is only available in raw {value_avail_in_row + 1}."
+                            self.msg_color = Color.BLUE
+                        else:
+                            self.solved_step += 1
+                            self.cells[value_avail_in_row][col].solved(self.solved_step, value)
+                            self.update_all_available_values(new_step=True)
+                            self.msg = f"Col {col + 1}: {value} is only available in raw {value_avail_in_row + 1}."
+                            self.msg_color = Color.BLUE
                         solved = True
                         break
         return solved
@@ -539,12 +632,17 @@ class Sudoku:
                                         # No need to check this value anymore (fow now...)
                                         break
                             if not value_found and value_avail_found_times == 1:
-                                self.solved_step += 1
-                                self.cells[value_avail_in_row][value_avail_in_col].solved(self.solved_step, value)
-                                self.update_all_available_values(new_step=True, update_derived=False)
-                                if self.verbose > 0:
-                                    self.msg = f"{value} is only available in cell ({value_avail_in_row+1}" + \
-                                                f",{value_avail_in_col + 1} in this square"
+                                if self.hint:
+                                    self.hint = self.cells[value_avail_in_row][value_avail_in_col]
+                                    self.msg = f"? is only available in cell ({value_avail_in_row + 1}" + \
+                                        f",{value_avail_in_col + 1} in this square"
+                                else:
+                                    self.solved_step += 1
+                                    self.cells[value_avail_in_row][value_avail_in_col].solved(self.solved_step, value)
+                                    self.update_all_available_values(new_step=True)
+                                    if self.verbose > 0:
+                                        self.msg = f"{value} is only available in cell ({value_avail_in_row+1}" + \
+                                                    f",{value_avail_in_col + 1} in this square"
                                 solved = True
                                 break
         return solved
@@ -661,6 +759,8 @@ class Sudoku:
         return removed
 
     def load_puzzle(self, a):
+        if self.loaded:
+            raise ValueError("Only one puzzle is available")
         self.loaded = True
         for row_index, row in enumerate(a):
             if len(row) != 9:
@@ -674,14 +774,20 @@ class Sudoku:
                     cell.value = cell_input
                     cell.solved_step = 0
                     cell.available_values.append({})
-        self.update_all_available_values(new_step=False, update_derived=False)
+        self.update_all_available_values(new_step=False)
 
 
 if __name__ == '__main__':
-    # Todo: add instructions, sound, more logic
+    # Todo: add sound, shortest failed trial
 
     sudoku = Sudoku()
+
+    # Solvable algo level 1
     # sudoku.load_puzzle(SudokuPuzzles.haaretz_20220311_medium)
+
     sudoku.load_puzzle(SudokuPuzzles.haaretz_20220401_medium)
     # sudoku.load_puzzle(SudokuPuzzles.haaretz_20220311_difficult)
+
+    # Solvable algo level 1
+    # sudoku.load_puzzle(SudokuPuzzles.israel_hayom_20220414_medium)
     sudoku.run()
