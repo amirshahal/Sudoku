@@ -25,6 +25,10 @@ class Color:
     BLUE = (0, 0, 255)
     GREEN = (0, 255, 0)
 
+class Status:
+    SOLVED = -1
+    NOT_SOLVED_NOT_STUCKED = -2
+
 
 class SudokuCell:
     def __init__(self, row, col, grid):
@@ -64,6 +68,30 @@ class SudokuCell:
         # self.available_values[-1] = {}
         if from_trial:
             self.grid.trial_on_step = step
+
+    def get_lssfc(self):
+        # lssfc is: longest surely stuck for cell i.e.:
+        # Only one value is positive (i.e. stuck), other values are negative (stuck, or got to a loop)
+        lssfc = -3
+        value_for_cell = -3
+        positive_values_found = 0
+        lssfc_msg = ""
+        for value in sorted(self.steps_to_stuck.keys()):
+            status = self.steps_to_stuck[value][-1][0]
+            if status > 0:
+                positive_values_found += 1
+                lssfc = len(self.steps_to_stuck[value])
+                for step in self.steps_to_stuck[value]:
+                    lssfc_msg += f'({step[0] +1 },{step[1] + 1}) <- {step[2]}, '
+
+            if status == -1:
+                value_for_cell = value
+
+        if positive_values_found > 1:
+            lssfc = -4
+            value_for_cell = -4
+        return lssfc, value_for_cell, lssfc_msg[0:-1]
+
 
     def set_square_cells(self):
         self.square_cells = []
@@ -110,6 +138,7 @@ class Sudoku:
         self.hint = False
         self.algo_level = 1
         self.is_copy = False
+        self.non_solveble_cell = None
 
     def __copy__(self):
         cls = self.__class__
@@ -284,7 +313,12 @@ class Sudoku:
             color = Color.RED
         self.print_text(f"Solvable? {solvable_status}", 26, color)
 
-        self.print_text(self.msg, 28, self.msg_color)
+        row = 28
+        if isinstance(self.msg, list):
+            for i, msg in enumerate(self.msg):
+                self.print_text(msg, row + i, self.msg_color)
+        else:
+            self.print_text(self.msg, row , self.msg_color)
 
     def show_values(self):
         cell_size = self.CONTAINER_WIDTH_HEIGHT // 9
@@ -380,6 +414,49 @@ class Sudoku:
             self.msg = f"Cell ({row + 1},{col + 1}): already has value of {cell.value}"
             self.msg_color = Color.RED
 
+    def apply_algo_level3(self):
+        """
+        Go over all non solved cells. Use only those with only 1 negative value
+        i.e. only one value is not stuck. That means all other values get stuck.
+        Among the stuck values, find the longest path for this cell. We will call
+        this value "longest surely stuck for cell", LSSFC
+        Find the cell with the minimal LSSFC and show it as the next solvable.
+        """
+        self.algo_level = 3
+        self.update_all_available_values(new_step=False)
+        best_cell_to_solve = None
+        best_cell_to_solve_LSSFC = None
+        best_cell_to_solve_value = None
+        best_cell_to_solve_msg = None
+        for row in range(9):
+            for col in range(9):
+                cell = self.cells[row][col]
+                lssfc, value_for_cell, msg = cell.get_lssfc()
+                if lssfc > 1 and (best_cell_to_solve_LSSFC is None or best_cell_to_solve_LSSFC > lssfc):
+                    best_cell_to_solve = cell
+                    best_cell_to_solve_LSSFC = lssfc
+                    best_cell_to_solve_value = value_for_cell
+                    best_cell_to_solve_msg = msg
+                    if self.verbose > 1:
+                        print(f'cell {cell} ,lssfc {lssfc} ,best_cell_to_solve_value {best_cell_to_solve_value}')
+
+        if self.verbose > 0:
+            print(f'Best cell to solve is {best_cell_to_solve}, with lssfc {best_cell_to_solve_LSSFC},' +
+                  f'value_for_cell= {best_cell_to_solve_value}')
+
+        if best_cell_to_solve is None:
+            print("ALGO_LEVEL3 FAILED!!!, Call Amir 054-9574802 and get a reward!")
+        else:
+            self.solved_step += 1
+            best_cell_to_solve.solved(self.solved_step, best_cell_to_solve_value)
+
+            self.msg = []
+            self.msg.append(f"Cell ({best_cell_to_solve.row + 1}, {best_cell_to_solve.col + 1}): only " + \
+                       f"{best_cell_to_solve_value} is available in this cell.")
+            self.msg.append(best_cell_to_solve_msg)
+            self.algo_level = 1
+            self.update_all_available_values(new_step=True)
+
     def check_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -396,8 +473,7 @@ class Sudoku:
                     sys.exit()
 
                 if event.key == pygame.locals.K_3:
-                    self.algo_level = 3
-                    self.update_all_available_values(new_step=False)
+                    self.apply_algo_level3()
 
                 if event.key == pygame.locals.K_h:
                     self.hint = True
@@ -467,6 +543,7 @@ class Sudoku:
 
     def update_all_available_values(self, new_step):
         self.solved = True
+        self.non_solveble_cell = None
         while True:
             avail_changed = False
             derive_changed = False
@@ -480,6 +557,7 @@ class Sudoku:
                         avail_changed = self.update_available_values(cell) or avail_changed
                         if len(cell.available_values[self.solved_step]) == 0:
                             self.solve_able = False
+                            self.non_solveble_cell = cell
                             self.msg = f"Not solvable!!! cell ({cell.row + 1},{cell.col + 1}) has no avail values"
                             self.msg_color = Color.RED
 
@@ -495,53 +573,49 @@ class Sudoku:
                                     self.msg = f"Not solvable!!! cell ({cell.row},{cell.col}) has no avail values"
                                     self.msg_color = Color.RED
                                     self.solve_able = False
+                                    self.non_solveble_cell = cell
                             if not self.is_copy and self.algo_level == 3:
-                                self.apply_algo_level3(cell)
+                                self.apply_algo_level3_to_cell(cell)
 
             if not avail_changed and not derive_changed:
                 break
 
-    def get_steps_to_stuck(self, cell, value):
+    def get_copy(self):
         puzzle_copy = copy.copy(self)
         puzzle_copy.is_copy = True
-        # puzzle_copy.verbose = 2
-        # for row in range(9):
-        #    for col in range(9):
-        #        puzzle_copy.cells[row][col] = copy.deepcopy(self.cells[row][col])
-
         for row in range(9):
             for col in range(9):
                 puzzle_copy.cells[row][col].grid = puzzle_copy
                 puzzle_copy.cells[row][col].set_square_cells()
+        return puzzle_copy
 
+    def get_steps_to_stuck(self, cell, value):
+        rv = []
+        puzzle_copy = self.get_copy()
         puzzle_copy.cells[cell.row][cell.col].value = value
+        puzzle_copy.verbose = 2
         puzzle_copy.update_all_available_values(new_step=False)
-        steps = 1
-        was_cell_solved = True
-        while puzzle_copy.solve_able and was_cell_solved and not puzzle_copy.solved:
-            was_cell_solved = puzzle_copy.solve_next_cell()
-            steps += 1
+        rv.append([cell.row, cell.col, value])
+        next_solved_cell = True
+        while puzzle_copy.solve_able and next_solved_cell is not None and not puzzle_copy.solved:
+            next_solved_cell = puzzle_copy.solve_next_cell()
+            if next_solved_cell is not None:
+                rv.append(next_solved_cell)
         if puzzle_copy.solved:
-            steps = -1
+            rv.append([Status.SOLVED, 0, 0])
         elif puzzle_copy.solve_able:
-            steps = -2
-        return steps
+            rv.append([Status.NOT_SOLVED_NOT_STUCKED, 0, 0])
+        else:
+            rv.append([puzzle_copy.non_solveble_cell.row, puzzle_copy.non_solveble_cell.col, 'X'])
+        return rv
 
-    def apply_algo_level3(self, cell):
+    def apply_algo_level3_to_cell(self, cell):
+        # Clean previous found values
+        cell.steps_to_stuck = {}
         for value in sorted(cell.available_values[-1]):
-
-            # print(f'Trying value {value} at cell {cell}')
             cell.steps_to_stuck[value] = self.get_steps_to_stuck(cell, value)
-            # print(f'value {value} sts= {cell.steps_to_stuck[value]}')
-            # print('------------------------------')
-        print(f'AL3 {cell} val {value} sts={cell.steps_to_stuck}')
-        """
-        Todo: go over all non solved cells. Use only those with only 1 negative value
-        i.e. only one value is not stuck. That means all other values get stuck.
-        Among the stuck values, find the longest path for this cell. We will call
-        this value "latest surely stuck for cell", LSSFC
-        Find the cell with the minimal LSSFC and show it as the next solvable. SHMG.
-        """
+        if self.verbose > 1:
+            print(f'AL3 {cell} val {value} sts={cell.steps_to_stuck}')
 
     def remove_derived_values(self, cell):
         changed = self.remove_non_available_values(cell, 'row_derived')
@@ -560,9 +634,9 @@ class Sudoku:
 
     def solve_next_cell(self):
         # Find cells that have unique values
-        solved_cell = False
+        rv = None
         for row in range(9):
-            if not solved_cell and self.solve_able:
+            if rv is None and self.solve_able:
                 for col in range(9):
                     cell = self.cells[row][col]
                     if cell.value is None:
@@ -572,6 +646,7 @@ class Sudoku:
                                 self.msg = f"Cell ({cell.row + 1}, {cell.col + 1}): only ? is available " + \
                                            "in this cell."
                                 self.msg_color = Color.BLUE
+                                value = None
                             else:
                                 value = list(cell.available_values[self.solved_step])[0]
                                 self.solved_step += 1
@@ -584,43 +659,44 @@ class Sudoku:
                                 if self.verbose > 1:
                                     print(f'solved step= {self.solved_step} ,{self.msg}')
                                     # playsound('slice.wav')
-                            solved_cell = True
+                            rv = [row, col, value]
                             break
 
-        if not solved_cell and self.solve_able:
+        if rv is None and self.solve_able:
             # There is no cell with single value available
             # go over rows (then columns, then squares) and see if a value is only available in one cell
-            solved_cell = self.find_value_avail_once_in_row()
-            if not solved_cell:
-                solved_cell = self.find_value_avail_once_in_col()
-                if not solved_cell:
-                    solved_cell = self.find_value_avail_once_in_square()
-        if self.algo_level < 2 and not solved_cell:
-            print("Using algo level 2")
+            rv = self.find_value_avail_once_in_row()
+            if rv is None:
+                rv = self.find_value_avail_once_in_col()
+                if rv is None:
+                    rv = self.find_value_avail_once_in_square()
+        if self.algo_level < 2 and rv is None:
+            if self.verbose > 2:
+                print("Using algo level 2")
             self.update_all_available_values(new_step=False)
             self.algo_level = 2
             return self.solve_next_cell()
 
-        if self.algo_level < 3 and not solved_cell and not self.is_copy:
-            print("TBD")
+        #if self.algo_level < 3 and not solved_cell and not self.is_copy:
+        #    print("TBD")
             #print("Using algo level 3")
             #self.algo_level = 3
             """
             For each non solved cell try every avail value. Among the values tried and found they make the puzzle not
             solvable, remove the one that makes the puzzle not solvable in the minimal steps. 
             """
-            self.update_all_available_values(new_step=False)
+            #self.update_all_available_values(new_step=False)
 
-        if solved_cell:
+        if rv is not None:
             self.algo_level = 1
 
-        return solved_cell
+        return rv
 
     def find_value_avail_once_in_row(self):
-        solved = False
+        rv = None
         value_avail_in_col = None
         for row in range(9):
-            if not solved:
+            if rv is None:
                 for value in range(1, 10):
                     value_found = False
                     value_avail_found_times = 0
@@ -649,16 +725,16 @@ class Sudoku:
                             self.msg_color = Color.BLUE
                             if self.verbose > 1:
                                 print(f'solved step= {self.solved_step} ,{self.msg}')
-                        solved = True
+                        rv = [row, value_avail_in_col, value]
                         # playsound('slice.wav')
                         break
-        return solved
+        return rv
 
     def find_value_avail_once_in_col(self):
-        solved = False
+        rv = None
         value_avail_in_row = None
         for col in range(9):
-            if not solved:
+            if rv is None:
                 for value in range(1, 10):
                     value_found = False
                     value_avail_found_times = 0
@@ -687,19 +763,18 @@ class Sudoku:
                             self.msg_color = Color.BLUE
                             if self.verbose > 1:
                                 print(f'solved step= {self.solved_step} ,{self.msg}')
-                        solved = True
+                        rv = [value_avail_in_row, col, value]
                         break
-        return solved
+        return rv
 
     def find_value_avail_once_in_square(self):
-        # Todo: test!
-        solved = False
+        rv = None
         value_avail_in_row = None
         value_avail_in_col = None
         for row in range(0, 9, 3):
-            if not solved:
+            if rv is None:
                 for col in range(0, 9, 3):
-                    if not solved:
+                    if rv is None:
                         for value in range(1, 10):
                             value_found = False
                             value_avail_found_times = 0
@@ -731,9 +806,9 @@ class Sudoku:
                                                 f",{value_avail_in_col + 1} in this square"
                                     if self.verbose > 1:
                                         print(f'solved step= {self.solved_step} ,{self.msg}')
-                                solved = True
+                                rv = [value_avail_in_row, value_avail_in_col, value]
                                 break
-        return solved
+        return rv
 
     def remove_non_available_value(self, cell, row, col, remove_type):
         removed = False
