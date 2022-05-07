@@ -68,3 +68,47 @@ israel_hayom_20220414_medium = [
         [None, None, None, None, None, None, None, None, 8],
         [None, 4, 8, None, 7, 9, None, None, None],
          ]
+
+
+haaretz_20220421_difficult = [
+         [None, None, None, None, 5, None, None, None, None],
+         [None, None, 4, None, None, 1, None, 7, 6],
+         [None, 6, 7, 3, None, 8, None, 1, None],
+
+        [2, 1, None, None, None, None, 9, 3, None],
+        [None, None, None, None, None, None, None, None, None],
+        [None, 7, 3, None, None, None, None, 5, 2],
+
+        [None, 4, None, 8, None, 6, 3, 2, None],
+        [8, 3, None, 9, None, None, 1, None, None],
+        [None, None, None, None, 1, None, None, None, None],
+         ]
+
+haaretz_20220415_medium = [
+         [None, None, None, None, 8, 6, None, None, None],
+         [9, None, 1, None, None, None, 7, None, None],
+         [None, None, None, 5, None, None, None, 4, None],
+
+        [None, None, None, None, 1, None, None, 7, 9],
+        [2, 3, 9, None, None, None, 5, 1, 8],
+        [1, 6, None, None, 5, None, None, None, None],
+
+        [None, 7, None, None, None, 1, None, None, None],
+        [None, None, 3, None, None, None, 8, None, 1],
+        [None, None, None, 2, 6, None, None, None, None],
+         ]
+
+
+haaretz_20220506_difficult = [
+         [1, None, None, 5, None, None, None, None, None],
+         [None, None, None, None, None, None, 2, 8, None],
+         [8, 3, None, None, 6, 9, 4, None, None],
+
+        [7, 9, None, None, 5, None, 1, None, None],
+        [None, 1, None, None, 2, None, None, 9, None],
+        [None, None, 3, None, 1, None, None, 6, 8],
+
+        [None, None, 1, 8, 3, None, None, 4, 9],
+        [None, 8, 6, None, None, None, None, None, None],
+        [None, None, None, None, None, 6, None, None, 3],
+         ]
