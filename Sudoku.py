@@ -214,13 +214,13 @@ class Sudoku:
             # VERTICAL
             pygame.draw.line(
                 self.surf, Color.BLACK,
-                (cont_x + (cellSize * x), cont_y),
-                (cont_x + (cellSize * x), self.CONTAINER_WIDTH_HEIGHT + cont_y), width)
+                (cont_x + int(cellSize * x), cont_y),
+                (cont_x + int(cellSize * x), self.CONTAINER_WIDTH_HEIGHT + cont_y), width)
             # HORIZONTAL
             pygame.draw.line(
                 self.surf, Color.BLACK,
-                (cont_x, cont_y + (cellSize * x)),
-                (cont_x + self.CONTAINER_WIDTH_HEIGHT, cont_y + (cellSize * x)), width)
+                (cont_x, cont_y + int(cellSize * x)),
+                (cont_x + self.CONTAINER_WIDTH_HEIGHT, cont_y + int(cellSize * x)), width)
 
             """
             if self.hint:
@@ -393,7 +393,7 @@ class Sudoku:
         # if you need to set a specific FPS look at tick methods.
 
         pygame.init()  # Initial Setup
-        SCREENSIZE = self.CONTAINER_WIDTH_HEIGHT * 1.6 + 50, self.CONTAINER_WIDTH_HEIGHT + 50
+        SCREENSIZE = int(self.CONTAINER_WIDTH_HEIGHT * 1.6) + 50, self.CONTAINER_WIDTH_HEIGHT + 50
         self.surf = pygame.display.set_mode(SCREENSIZE)
         pygame.display.set_caption('Amir\'s Sudoku')
 
